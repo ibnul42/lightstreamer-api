@@ -3,16 +3,27 @@ const Message = require("../models/Message");
 const { v4: uuidv4 } = require("uuid");
 
 // API 1 - Get API List
-exports.getApiList = (req, res) => {
-  res.json({
-    endpoints: [
-      "/api/create-id",
-      "/api/send-command",
-      "/api/process-command",
-      "/api/pending-commands",
-    ],
-  });
+exports.getApiList = async (req, res) => {
+  try {
+    // Fetch all IDs from the database
+    const messages = await Message.find({}, "id");
+    const ids = messages.map((msg) => msg.id);
+
+    res.json({
+      endpoints: [
+        "https://lightstreamer-api.vercel.app/api/create-id",
+        "https://lightstreamer-api.vercel.app/api/send-command",
+        "https://lightstreamer-api.vercel.app/api/process-command",
+        "https://lightstreamer-api.vercel.app/api/pending-commands",
+      ],
+      createdIds: ids, // Add created IDs to the response
+    });
+  } catch (error) {
+    console.error("Error fetching created IDs:", error);
+    res.status(500).json({ error: "Error fetching created IDs" });
+  }
 };
+
 
 // API 2 - Create Unique ID
 exports.createId = async (req, res) => {
