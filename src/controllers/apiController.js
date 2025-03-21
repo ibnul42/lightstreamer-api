@@ -5,9 +5,6 @@ const { v4: uuidv4 } = require("uuid");
 // API 1 - Get API List
 exports.getApiList = async (req, res) => {
   try {
-    // Fetch all IDs from the database
-    const messages = await Message.find({}, "id");
-
     res.json({
       endpoints: [
         "https://lightstreamer-api.vercel.app/api/discovery",
@@ -18,7 +15,9 @@ exports.getApiList = async (req, res) => {
       ],
     });
   } catch (error) {
-    res.status(500).json({ error: "Error fetching created IDs" });
+    res
+      .status(500)
+      .json({ success: false, error: "Error fetching created IDs" });
   }
 };
 
@@ -28,17 +27,23 @@ exports.createId = async (req, res) => {
     const { clientid } = req.body;
 
     if (!clientid) {
-      return res.status(400).json({ error: "ID is required" });
+      return res.status(400).json({ success: false, error: "ID is required" });
     }
 
     if (clientid.trim().length < 6) {
-      return res.status(400).json({ error: "ID length should be at least 6" });
+      return res
+        .status(400)
+        .json({ success: false, error: "ID length should be at least 6" });
     }
 
     // Check if ID already exists
     const existingMessage = await Message.findOne({ id: clientid });
     if (existingMessage) {
-      return res.status(400).json({ error: "ID already exists" });
+      return res.status(400).json({
+        success: false,
+        exists: true,
+        message: "client exists",
+      });
     }
 
     const message = new Message({
