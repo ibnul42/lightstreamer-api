@@ -36,7 +36,7 @@ exports.createId = async (req, res) => {
     }
 
     // Check if ID already exists
-    const existingMessage = await Message.findOne({ clientid });
+    const existingMessage = await Message.findOne({ id: clientid });
     if (existingMessage) {
       return res.status(400).json({ error: "ID already exists" });
     }
