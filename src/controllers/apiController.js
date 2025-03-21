@@ -7,34 +7,50 @@ exports.getApiList = async (req, res) => {
   try {
     // Fetch all IDs from the database
     const messages = await Message.find({}, "id");
-    const ids = messages.map((msg) => msg.id);
 
     res.json({
       endpoints: [
-        "https://lightstreamer-api.vercel.app/api/create-id",
+        "https://lightstreamer-api.vercel.app/api/discovery",
+        "https://lightstreamer-api.vercel.app/api/enroll",
         "https://lightstreamer-api.vercel.app/api/send-command",
-        "https://lightstreamer-api.vercel.app/api/process-command",
+        "https://lightstreamer-api.vercel.app/api/update-command",
         "https://lightstreamer-api.vercel.app/api/pending-commands",
       ],
-      createdIds: ids, // Add created IDs to the response
     });
   } catch (error) {
-    console.error("Error fetching created IDs:", error);
     res.status(500).json({ error: "Error fetching created IDs" });
   }
 };
 
-
 // API 2 - Create Unique ID
 exports.createId = async (req, res) => {
   try {
-    const newId = uuidv4().replace(/-/g, "").slice(0, 10); // Generate unique alphanumeric ID
-    const message = new Message({ id: newId, command: "" });
+    const { clientid } = req.body;
+
+    if (!clientid) {
+      return res.status(400).json({ error: "ID is required" });
+    }
+
+    if (clientid.trim().length < 6) {
+      return res.status(400).json({ error: "ID length should be at least 6" });
+    }
+
+    // Check if ID already exists
+    const existingMessage = await Message.findOne({ clientid });
+    if (existingMessage) {
+      return res.status(400).json({ error: "ID already exists" });
+    }
+
+    const message = new Message({
+      id: clientid,
+      status: "pending",
+      commands: [],
+    });
     await message.save();
-    res.json({ success: true, id: newId });
+
+    res.json({ success: true, data: message });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Error creating ID" });
+    res.status(500).json({ success: false, error: "Error creating ID" });
   }
 };
 
@@ -42,91 +58,87 @@ exports.createId = async (req, res) => {
 exports.sendCommand = async (req, res) => {
   try {
     const { id, command } = req.body;
+
+    if (!id || !command) {
+      return res
+        .status(400)
+        .json({ success: false, error: "ID and command are required" });
+    }
+
+    const newCommand = {
+      id, // Generate a unique ID for the command
+      command,
+      createdAt: new Date(),
+    };
+
     const message = await Message.findOneAndUpdate(
       { id },
-      { command },
+      {
+        $push: { commands: newCommand }, // Add new command to the commands array
+        status: "unused", // Update status to "unused"
+      },
       { new: true }
     );
-    if (!message) return res.status(404).json({ error: "ID not found" });
-    res.json({ success: true, message });
+
+    if (!message)
+      return res.status(404).json({ success: false, error: "ID not found" });
+
+    res.json({ success: true, data: message });
   } catch (error) {
-    res.status(500).json({ error: "Error sending command" });
+    res.status(500).json({ success: false, error: "Error sending command" });
   }
 };
 
 // API 4 - Process Command & Send to LightStreamer
 exports.processCommand = async (req, res) => {
   try {
-    const { id, command } = req.body;
+    const { id } = req.body;
 
     // Validate input
-    if (!id || !command) {
-      return res.status(400).json({ error: "ID and command are required" });
+    if (!id) {
+      return res.status(400).json({ error: "ID is required" });
     }
 
     // Find the message in MongoDB
     const message = await Message.findOne({ id });
-    if (!message) return res.status(404).json({ error: "ID not found" });
+    if (!message)
+      return res.status(404).json({ success: false, error: "ID not found" });
 
-    const client = new LightstreamerClient("http://localhost:8080", "WELCOME");
+    // Ensure there are commands in the array
+    if (!message.commands.length) {
+      return res
+        .status(400)
+        .json({ success: false, error: "No commands available" });
+    }
 
-    // Wait for the connection to establish
-    await new Promise((resolve, reject) => {
-      let timeout = setTimeout(() => {
-        reject(new Error("LightStreamer connection timeout"));
-      }, 5000); // Timeout after 5 seconds
+    // Get the latest command
+    const latestCommand = message.commands[message.commands.length - 1].command;
 
-      client.addListener({
-        onStatusChange: (status) => {
-          console.log("LightStreamer status:", status);
+    // Update status to 'used'
+    await Message.findOneAndUpdate({ id }, { status: "used" });
 
-          if (status.startsWith("CONNECTED")) {
-            clearTimeout(timeout);
-            resolve();
-          } else if (
-            status.startsWith("DISCONNECTED") ||
-            status.startsWith("ERROR")
-          ) {
-            reject(new Error(`LightStreamer connection failed: ${status}`));
-          }
-        },
-      });
-
-      client.connect();
-    });
-
-    // Send the command message
-    client.sendMessage(command, {
-      onProcessed: () => {
-        console.log("Message sent successfully:", command);
-        res.json({ success: true, message: "Command sent" });
-
-        // Disconnect client after sending message
-        client.disconnect();
-      },
-      onError: (original, code, message) => {
-        console.error("Error sending message:", message);
-        res.status(500).json({ error: "Message sending failed" });
-        client.disconnect();
-      },
-      onAbort: (original, code, message) => {
-        console.error("Message aborted:", message);
-        res.status(500).json({ error: "Message aborted" });
-        client.disconnect();
-      },
+    res.json({
+      success: true,
+      "latest command": latestCommand,
+      message: "Command processed",
     });
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Failed to process command" });
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to process command" });
   }
 };
 
 // API 5 - Get Pending Commands
 exports.getPendingCommands = async (req, res) => {
   try {
-    const pendingMessages = await Message.find({ received: false });
+    // Find messages where status is "unused"
+    const pendingMessages = await Message.find({ status: "unused" });
+
     res.json({ success: true, pending: pendingMessages });
   } catch (error) {
-    res.status(500).json({ error: "Error fetching pending commands" });
+    res
+      .status(500)
+      .json({ success: false, error: "Error fetching pending commands" });
   }
 };

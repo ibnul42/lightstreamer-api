@@ -9,10 +9,10 @@ const {
 } = require("./controllers/apiController");
 
 // Define routes
-router.get("/", getApiList);
-router.post("/create-id", createId);
+router.get("/discovery", getApiList);
+router.post("/enroll", createId);
 router.post("/send-command", sendCommand);
-router.post("/process-command", processCommand);
+router.post("/update-command", processCommand);
 router.get("/pending-commands", getPendingCommands);
 
 module.exports = router;
