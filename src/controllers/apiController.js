@@ -99,7 +99,7 @@ exports.sendCommand = async (req, res) => {
 
     if (!message) return res.status(404).json({ error: "ID not exist" });
 
-    res.json({ success: true });
+    res.json({ success: true, messageid });
   } catch (error) {
     res.status(500).json({ error: "Error sending command" });
   }
