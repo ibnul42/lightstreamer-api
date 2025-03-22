@@ -1,18 +1,14 @@
 const mongoose = require("mongoose");
 
 const messageSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  status: {
-    type: String,
-    enum: ["pending", "used", "unused"],
-    default: "pending",
-  },
+  clientid: { type: String, required: true, unique: true },
   commands: [
     {
-      id: { type: String, required: true },
-      command: { type: String, required: true },
+      messageid: { type: String, unique: true, sparse: true }, // Unique message ID for each command
+      message: { type: String }, // Renamed 'command' to 'message'
+      status: { type: String },
       createdAt: { type: Date, default: Date.now },
-    },
+    }
   ],
   createdAt: { type: Date, default: Date.now },
 });

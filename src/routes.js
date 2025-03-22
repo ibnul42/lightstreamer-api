@@ -13,6 +13,6 @@ router.get("/discovery", getApiList);
 router.post("/enroll", createId);
 router.post("/send-command", sendCommand);
 router.post("/update-command", processCommand);
-router.get("/pending-commands", getPendingCommands);
+router.post("/pending-commands", getPendingCommands);
 
 module.exports = router;
