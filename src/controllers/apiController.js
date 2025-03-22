@@ -22,17 +22,31 @@ exports.getApiList = async (req, res) => {
 // API 2 - Create Unique ID
 exports.createId = async (req, res) => {
   try {
-    let id =
-      req.body.clientid && req.body.clientid.trim() !== ""
-        ? req.body.clientid
-        : "";
+    let { clientid, selfgenid } = req.body;
 
-    if (id.length === 0) {
-      id = uuidv4().replace(/-/g, "").slice(0, 10);
+    // Validate if selfgenid is provided and is a boolean
+    if (typeof selfgenid !== "boolean") {
+      return res.status(400).json({ error: "selfgenid must be true or false" });
+    }
+
+    // If selfgenid is true, use the provided clientid, else generate a new one if empty
+    if (!selfgenid) {
+      if (!clientid || clientid.trim() === "") {
+        clientid = uuidv4().replace(/-/g, "").slice(0, 10);
+      } else {
+        // If clientid is provided with selfgenid false, check if it exists
+        const existingMessage = await Message.findOne({ clientid });
+        if (!existingMessage) {
+          return res.status(404).json({
+            exists: false,
+            message: "Client does not exist",
+          });
+        }
+      }
     }
 
     // Check if the client ID already exists
-    const existingMessage = await Message.findOne({ clientid: id });
+    const existingMessage = await Message.findOne({ clientid });
     if (existingMessage) {
       return res.status(400).json({
         exists: true,
@@ -42,17 +56,18 @@ exports.createId = async (req, res) => {
 
     // Ensure messages have a default empty structure
     const message = new Message({
-      clientid: id,
-      messages: [], // Ensure messages is explicitly set
+      clientid,
+      messages: [],
     });
 
     await message.save();
 
-    res.json({ success: true, clientid: id });
+    res.json({ success: true, clientid, selfgenid });
   } catch (error) {
     res.status(500).json({ error: "Error creating ID" });
   }
 };
+
 
 // API 3 - Send Command
 exports.sendCommand = async (req, res) => {
