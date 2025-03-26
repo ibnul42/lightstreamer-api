@@ -1,21 +1,29 @@
 const { LightstreamerClient } = require("lightstreamer-client-node");
 const Message = require("../models/Message");
 const { v4: uuidv4 } = require("uuid");
+const router = require("../routes");
+const listEndpoints = require("express-list-endpoints");
 
 // API 1 - Get API List
 exports.getApiList = async (req, res) => {
   try {
-    res.json({
-      endpoints: [
-        "https://lightstreamer-api.vercel.app/api/discovery",
-        "https://lightstreamer-api.vercel.app/api/enroll",
-        "https://lightstreamer-api.vercel.app/api/send-command",
-        "https://lightstreamer-api.vercel.app/api/update-command",
-        "https://lightstreamer-api.vercel.app/api/pending-commands",
-      ],
-    });
+    console.log(req.app)
+    const apiBaseUrl = `https://lightstreamer-api.vercel.app/api`; // Dynamic base URL
+
+    // Get all registered routes
+    const endpoints = listEndpoints(req.app)
+      .filter((endpoint) => endpoint.path.startsWith("/api")) // Filter only API routes
+      .flatMap((endpoint) =>
+        endpoint.methods.map((method) => ({
+          method,
+          path: `${apiBaseUrl}${endpoint.path.replace("/api", "")}`,
+        }))
+      );
+
+    res.json({ endpoints });
   } catch (error) {
-    res.status(500).json({ error: "Error fetching created IDs" });
+    console.error("Error fetching API list:", error);
+    res.status(500).json({ error: "Error fetching API list" });
   }
 };
 
@@ -67,7 +75,6 @@ exports.createId = async (req, res) => {
     res.status(500).json({ error: "Error creating ID" });
   }
 };
-
 
 // API 3 - Send Command
 exports.sendCommand = async (req, res) => {
